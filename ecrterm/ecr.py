@@ -16,7 +16,7 @@ from ecrterm.exceptions import (
 from ecrterm.packets.apdu import Packets
 from ecrterm.packets.base_packets import (
     Authorisation, Completion, DisplayText, EndOfDay, Packet, PrintLine,
-    Registration, ResetTerminal, StatusEnquiry, StatusInformation)
+    Registration, ResetTerminal, StatusEnquiry, StatusInformation, StatusEnquiryNoService)
 from ecrterm.packets.bmp import BCD
 from ecrterm.transmission._transmission import Transmission
 from ecrterm.transmission.signals import ACK, DLE, ETX, NAK, STX, TRANSMIT_OK
@@ -269,6 +269,31 @@ class ECR(object):
                 printout += [packet.fixed_values['text']]
         return printout
 
+    def last_printout_with_attribute(self):
+        """
+        returns all printlines from the last history.
+        @todo: TextBlock support - if some printer decides to do it that
+        way.
+        """
+        printout = []
+        for entry in self.transmitter.last_history:
+            inc, packet = entry
+            if inc and isinstance(packet, PrintLine):
+                printout += [(packet.fixed_values['attribute'], packet.fixed_values['text'])]
+        return printout
+
+    def last_status_information(self):
+        """
+        returns all StatusInformation messages from the last history.
+        """
+        status_information = []
+        for entry in self.transmitter.last_history:
+            inc, packet = entry
+            if inc and isinstance(packet, StatusInformation):
+                packet_dict = {b._key: b.value() for b in packet.bitmaps}
+                status_information += [packet_dict]
+        return status_information
+
     def payment(self, amount_cent=50, listener=None):
         """
         executes a payment in amount of cents.
@@ -354,6 +379,18 @@ class ECR(object):
                 if not self.version:
                     self.version = self.last.completion.fixed_values.get(
                         'sw-version', None)
+                return self.last.completion.fixed_values.get(
+                    'terminal-status', None)
+            # no completion means some error.
+        return False
+
+    def statusNoServiceByte(self):
+        """
+        executes a status enquiry without sending a service byte
+        """
+        errors = self.transmit(StatusEnquiryNoService())
+        if not errors:
+            if isinstance(self.last.completion, Completion):
                 return self.last.completion.fixed_values.get(
                     'terminal-status', None)
             # no completion means some error.

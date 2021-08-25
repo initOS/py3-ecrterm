@@ -11,7 +11,7 @@ from ecrterm.common import Transport, noop
 from ecrterm.conv import bs2hl, hl2bs, toBytes, toHexString
 from ecrterm.crc import crc_xmodem16
 from ecrterm.exceptions import (
-    TransportLayerException, TransportTimeoutException)
+    TransportLayerException, TransportTimeoutException, TransportLayerTimeoutException)
 from ecrterm.packets.apdu import APDUPacket
 from ecrterm.transmission.signals import (
     ACK, DLE, ETX, NAK, STX, TIMEOUT_T1, TIMEOUT_T2)
@@ -167,7 +167,7 @@ class SerialTransport(Transport):
         header = bs2hl(header)
         # test if there was a transmission:
         if header == []:
-            raise TransportLayerException('Reading Header Timeout')
+            raise TransportLayerTimeoutException('Reading Header Timeout')
         # test our header to be valid
         if header != [DLE, STX]:
             self.slog(header, True)
@@ -212,7 +212,9 @@ class SerialTransport(Transport):
         try:
             crc, apdu = self.read(timeout)
             msg = SerialMessage(apdu)
-        except Exception:
+        except TransportLayerTimeoutException:
+            raise
+        except TransportLayerException:
             # this is a NAK - re-raise for further investigation.
             self.write_nak()
             raise

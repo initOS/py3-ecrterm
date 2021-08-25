@@ -721,6 +721,18 @@ class StatusEnquiry(Packet):
 
 Packets.register(StatusEnquiry)
 
+
+class StatusEnquiryNoService(Packet):
+    """
+    05 01
+    """
+    cmd_class = 0x5
+    cmd_instr = 0x1
+    wait_for_completion = True
+
+
+Packets.register(StatusEnquiryNoService)
+
 if __name__ == '__main__':
     # test the register
     from pprint import pprint
