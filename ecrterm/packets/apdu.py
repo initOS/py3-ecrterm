@@ -102,6 +102,7 @@ class APDUPacket(object):
                 if klass:
                     bmp = klass(v)
                     bmp._id = key
+                    bmp._key = k
                     bmp._descr = info
                     bitmaps += [bmp]
         self.fixed_values = fvalues
