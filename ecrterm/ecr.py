@@ -16,7 +16,8 @@ from ecrterm.exceptions import (
 from ecrterm.packets.apdu import Packets
 from ecrterm.packets.base_packets import (
     Authorisation, Completion, DisplayText, EndOfDay, Packet, PrintLine,
-    Registration, ResetTerminal, StatusEnquiry, StatusInformation, StatusEnquiryNoService)
+    Registration, ResetTerminal, StatusEnquiry, StatusInformation,
+    StatusEnquiryNoService, SendTurnoverTotals)
 from ecrterm.packets.bmp import BCD
 from ecrterm.transmission._transmission import Transmission
 from ecrterm.transmission.signals import ACK, DLE, ETX, NAK, STX, TRANSMIT_OK
@@ -96,7 +97,7 @@ def parse_represented_data(data):
     return p
 
 
-def ecr_log(data, incoming=False):
+def ecr_log(data, incoming=False, **kwargs):
     try:
         if incoming:
             incoming = '<'
@@ -132,6 +133,7 @@ class ECR(object):
     MAX_TEXT_LINES = 4
     _state_registered = None
     _state_connected = None
+    ecr_log = ecr_log
 
     def __init__(self, device='/dev/ttyUSB0', password='123456'):
         """
@@ -150,7 +152,7 @@ class ECR(object):
         elif device.startswith('socket://'):
             self.transport = SocketTransport(uri=device)
         # This turns on debug logging
-        # self.transport.slog = ecr_log
+        # self.transport.slog = self._ecr_log
         self.daylog = []
         self.daylog_template = ''
         self.history = []
@@ -182,6 +184,8 @@ class ECR(object):
             kwargs['password'] = self.password
         if config_byte is not None:
             kwargs['config_byte'] = config_byte
+
+        self.ecr_log(kwargs, raw=True)
 
         ret = self.transmit(Registration(**kwargs))
 
@@ -238,12 +242,16 @@ class ECR(object):
         # old_histoire = self.transmitter.history
         # self.transmitter.history = []
         # we send the packet
+        result = False
         packet = EndOfDay(self.password)
         if listener:
             packet.register_response_listener(listener)
-        result = self.transmit(packet=packet)
+        code = self.transmit(packet=packet)
         # now save the log
-        self.daylog = self.last_printout()
+        self.daylog = self.last_printout_with_attribute()
+
+        if code == 0:
+            result = True
 
         if not self.daylog:
             # there seems to be no printout. we search in statusinformation.
@@ -254,6 +262,26 @@ class ECR(object):
                 import traceback
                 traceback.print_exc()
                 error('Error in Daylog Template')
+        return result
+
+    def turnover_totals(self, listener=None):
+        """
+        - sends request for turnover totals.
+        - saves the log in `turnover_totals`
+
+        @returns: 0 if there were no protocol errors.
+        """
+        result = False
+        packet = SendTurnoverTotals(self.password)
+        if listener:
+            packet.register_response_listener(listener)
+        code = self.transmit(packet=packet)
+        # now save the log
+        self.totalslog = self.last_printout_with_attribute()
+
+        if code == 0:
+            result = True
+
         return result
 
     def last_printout(self):
