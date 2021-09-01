@@ -1,4 +1,5 @@
 import datetime
+from ecrterm.packets.bitmaps import BITMAPS
 
 from ecrterm.common import ERRORCODES, INTERMEDIATE_STATUS_CODES
 from ecrterm.conv import bs2hl, toHexString
@@ -200,7 +201,7 @@ class Registration(Packet):
 Packets.register(Registration)
 
 
-class Kassenbericht(Packet):
+class SendTurnoverTotals(Packet):
     """A cardcomplete packet?"""
     cmd_class = 0x0f
     cmd_instr = 0x10
@@ -216,7 +217,7 @@ class Kassenbericht(Packet):
         return []
 
 
-Packets.register(Kassenbericht)
+Packets.register(SendTurnoverTotals)
 
 
 class EndOfDay(Packet):
@@ -328,7 +329,20 @@ class Completion(Packet):
                 self.fixed_values['sw-version'] = l_var.value()
                 if len(rest) >= 1:
                     self.fixed_values['terminal-status'] = rest[0]
-                    # FIXME Ignores TLV components
+
+                    # FIXME Ignores TLV components?
+                    self.bitmaps = []
+                    rest = rest[1:]
+                    while len(rest) >= 1:
+                        id = rest[0]
+                        if id in BITMAPS:
+                            klass, key, info = BITMAPS[id]
+                            bmp = klass()
+                            bmp._id = id
+                            rest = bmp.parse(rest[1:])
+                            self.bitmaps.append(bmp)
+                        else:
+                            break
                     return []
                 else:
                     self.fixed_values = {}
