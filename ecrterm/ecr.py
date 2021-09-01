@@ -8,6 +8,7 @@ Maybe create a small console program which allows us to:
 """
 from logging import error
 from time import sleep
+from ecrterm.common import noop
 
 from ecrterm.common import TERMINAL_STATUS_CODES
 from ecrterm.conv import bs2hl, toBytes, toHexString
@@ -153,6 +154,7 @@ class ECR(object):
             self.transport = SocketTransport(uri=device)
         # This turns on debug logging
         # self.transport.slog = self._ecr_log
+        self.ecr_log = noop
         self.daylog = []
         self.daylog_template = ''
         self.history = []
