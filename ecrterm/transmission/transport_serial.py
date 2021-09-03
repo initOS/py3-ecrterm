@@ -212,7 +212,7 @@ class SerialTransport(Transport):
         try:
             crc, apdu = self.read(timeout)
             msg = SerialMessage(apdu)
-        except TransportLayerTimeoutException:
+        except TransportTimeoutException:
             raise
         except TransportLayerException:
             # this is a NAK - re-raise for further investigation.
