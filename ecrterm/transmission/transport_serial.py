@@ -102,13 +102,14 @@ class SerialTransport(Transport):
     slog = noop
     insert_delays = True
 
-    def __init__(self, device):
+    def __init__(self, device, baudrate=9600):
         self.device = device
+        self.baudrate = baudrate
         self.connection = None
 
     def connect(self, timeout=30):
         ser = self.SerialCls(
-            port=self.device, baudrate=9600, parity=serial.PARITY_NONE,
+            port=self.device, baudrate=self.baudrate, parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_TWO, bytesize=serial.EIGHTBITS,
             timeout=timeout,  # set a timeout value, None for waiting forever
             xonxoff=0,  # disable software flow control

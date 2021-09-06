@@ -136,7 +136,7 @@ class ECR(object):
     _state_connected = None
     ecr_log = ecr_log
 
-    def __init__(self, device='/dev/ttyUSB0', password='123456'):
+    def __init__(self, device='/dev/ttyUSB0', password='123456', baudrate=9600):
         """
         Initializes an ECR object and connects to the serial device
         given. Fails if Serial Device is not found.
@@ -149,7 +149,7 @@ class ECR(object):
         transport: `socket://192.168.1.163:20007`
         """
         if device.startswith('/') or device.startswith('COM'):
-            self.transport = SerialTransport(device)
+            self.transport = SerialTransport(device, baudrate)
         elif device.startswith('socket://'):
             self.transport = SocketTransport(uri=device)
         # This turns on debug logging
