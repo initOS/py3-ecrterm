@@ -18,7 +18,8 @@ from ecrterm.packets.apdu import Packets
 from ecrterm.packets.base_packets import (
     Authorisation, Completion, DisplayText, EndOfDay, Packet, PrintLine,
     Registration, ResetTerminal, StatusEnquiry, StatusInformation,
-    StatusEnquiryNoService, SendTurnoverTotals)
+    StatusEnquiryNoService, SendTurnoverTotals, IntermediateStatusInformation,
+    Abort)
 from ecrterm.packets.bmp import BCD
 from ecrterm.transmission._transmission import Transmission
 from ecrterm.transmission.signals import ACK, DLE, ETX, NAK, STX, TRANSMIT_OK
@@ -323,6 +324,40 @@ class ECR(object):
                 packet_dict = {b._key: b.value() for b in packet.bitmaps}
                 status_information += [packet_dict]
         return status_information
+
+    def last_intermediate_status_information(self):
+        """
+        returns all IntermediateStatusInformation messages from the last history.
+        """
+        status_information = []
+        for entry in self.transmitter.last_history:
+            inc, packet = entry
+            if inc and isinstance(packet, IntermediateStatusInformation):
+                packet_dict = {b._key: b.value() for b in packet.bitmaps}
+                status_information += [packet.fixed_values.get('intermediate_status', None)]
+        return status_information
+
+    def last_aborts(self):
+        """
+        returns all Abort messages from the last history.
+        """
+        abort_information = []
+        for entry in self.transmitter.last_history:
+            inc, packet = entry
+            if inc and isinstance(packet, Abort):
+                packet_dict = {b._key: b.value() for b in packet.bitmaps}
+                abort_information += [packet.fixed_values.get('error_code', None)]
+        return abort_information
+
+    def last_packet(self):
+        """
+        returns last messages.
+        """
+        packet_dict = []
+        inc, packet = self.transmitter.last
+        if inc:
+            packet_dict = {b._key: b.value() for b in packet.bitmaps}
+        return packet_dict
 
     def payment(self, amount_cent=50, listener=None):
         """

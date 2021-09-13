@@ -362,20 +362,25 @@ class Abort(Packet):
     code
     """
     cmd_instr = 0x1E
-    error_code = 0
 
     def consume_fixed(self, data, length):
         # length should be 1, and data should contain the error code.
         if length:
-            self.error_code = int(data[0])
+            self.fixed_values['error_code'] = int(data[0])
             return data[1:]
         return []
 
     def enrich_fixed(self):
         """Enrich the serialized data with fixed argument error_code."""
-        if self.error_code:
-            return [int(self.error_code)]
+        if self.fixed_values['error_code']:
+            return [int(self.fixed_values['error_code'])]
         return []
+
+    def __repr__(self):
+        return 'Abort{06 1E}: %s' % (
+            ERRORCODES.get(
+                self.fixed_values.get('error_code', None),
+                'No error code'))
 
 
 Packets.register(Abort)
