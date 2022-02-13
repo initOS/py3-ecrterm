@@ -228,8 +228,12 @@ class APDUPacket(object):
         data = self.consume_fixed(data, length)
         # step 2: bitmaps.
         while data:
-            bmp, data = BMP.read_stream(data)
-            bitmaps += [bmp]
+            try:
+                bmp, data = BMP.read_stream(data)
+                bitmaps += [bmp]
+            except NotImplementedError as e:
+                #Ignore further bitmaps to not break the transmission
+                break
         self.bitmaps = bitmaps
     data = property(get_data, set_data)
 

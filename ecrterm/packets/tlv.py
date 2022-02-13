@@ -17,6 +17,9 @@ TLV Container Format.
         # b8 if 1, this byte only codes how many follow.
 """
 from ecrterm.packets.bmp import BMP
+from ecrterm import conv
+import logging
+logger = logging.getLogger('py3-ecrterm')
 
 class TLVFactory(BMP):
     @classmethod
@@ -61,43 +64,54 @@ class TLV_TAG(TLVFactory):
             return [length, ]
 
     def parse(self, data):
-        # First find out tag
-        if data[0] & 0x1F == 0x1F: # >1-byte tag
-            tag_length = 2
-            data_index = 1
-            tag = data[data_index] & 0x7F
-            while ((data[data_index] & 0x80) >> 7) != 0:
-                tag = (tag << 7) | (data[data_index] & 0x7F)
-                data_index += 1
-                tag_length += 1
+        try:
+            # First find out tag
+            if data[0] & 0x1F == 0x1F: # >1-byte tag
+                tag_length = 2
+                data_index = 1
+                tag = data[data_index] & 0x7F
+                while ((data[data_index] & 0x80) >> 7) != 0:
+                    tag = (tag << 7) | (data[data_index] & 0x7F)
+                    data_index += 1
+                    tag_length += 1
 
-        else: # 1-byte length
-            tag = data[0] & 0x1F
-            tag_length = 1
+            else: # 1-byte tag length
+                tag = data[0] & 0x1F
+                tag_length = 1
 
-        # Now parse length 
-        data = data[tag_length:]
-        length_length = 1
-        l1 = data[0]
-        if l1 > 0x80: # >1-byte length
-            bytes = max(2, l1 - 0x80)
-            if bytes == 2:
-                # hb, lb
-                hb = data[1]
-                lb = data[2]
-                length += (hb << 8) + lb
-            elif bytes == 1:
-                # one byte.
-                length = data[1]
-            length_length += bytes
-        else:
-            length = l1
-        data = data[length_length:]
+            # Now parse length 
+            data = data[tag_length:]
+            length_length = 1
+            l1 = data[0]
+            if l1 > 0x80: # >1-byte length
+                bytes = min(2, l1 - 0x80) # more than 2 bytes: RFU
+                if bytes == 2:
+                    # hb, lb
+                    hb = data[1]
+                    lb = data[2]
+                    length = (hb << 8) + lb
+                elif bytes == 1:
+                    # one byte.
+                    length = data[1]
+                length_length += bytes
+            elif l1 == 0x80:
+                raise Exception("Invalid TLV length")
+            else:
+                length = l1
+            data = data[length_length:]
 
-        self._id = tag
-        self._data = data[:length]
-        return data[length:]
+            self._id = tag
+            self._data = data[:length]
+            return data[length:]
+        except IndexError as e:
+            #Not enough data -> malformed TLV?
+            raise
+        except UnboundLocalError as e:
+            #Not enough data -> malformed TLV?
+            raise
 
+    def value(self):
+        return "[Tag: %X, Value: %s]" % (self._id, conv.toHexString(self._data))
 
     def dump(self):  # dump the bytes.
         """
@@ -135,9 +149,9 @@ for key in TLV_TAGS.keys():
 
 class TLV(BMP):
     _id = 0x06
-    _tlvs = []
 
     def __init__(self, data=None):
+        self._tlvs = []
         if data:
             tlvs = []
             for k, v in data.items():
@@ -179,7 +193,7 @@ class TLV(BMP):
         # first find out length
         l1 = data[0]
         if l1 > 0x80:
-            bytes = max(2, l1 - 0x80)
+            bytes = min(2, l1 - 0x80) # more than 2 bytes: RFU
             if bytes == 2:
                 # hb, lb
                 hb = data[1]
@@ -190,18 +204,42 @@ class TLV(BMP):
                 # one byte.
                 length = data[1]
                 data = data[2:]
+        elif l1 == 0x80:
+            logger.error("Invalid TLV length")
+            length = 0
         else:
             length = l1
             data = data[1:]
 
         # then parse all TLV containers in data[:length]
         tlv_data = data[:length]
-        while len(tlv_data) > 0:
-            tlv = TLV_TAG()
-            tlv_data = tlv.parse(tlv_data)
-            self._tlvs.append(tlv)
+        if len(tlv_data) == length: # length sanity check
+            while len(tlv_data) > 0:
+                try:
+                    tlv = TLV_TAG()
+                    tlv_data = tlv.parse(tlv_data)
+                    self._tlvs.append(tlv)
+                except IndexError as e:
+                    # Ignore further TLVs, since something went wrong while decoding
+                    logger.error("IndexError exception while parsing TLV objects: %s" % str(e))
+                    break
+                except UnboundLocalError as e:
+                    # Ignore further TLVs, since something went wrong while decoding
+                    logger.error("UnboundLocalError exception while parsing TLV objects: %s" % str(e))
+                    break
+                except Exception as e:
+                    # Ignore further TLVs, since something went wrong while decoding
+                    logger.error("Exception while parsing TLV objects: %s" % str(e))
+                    break
         
-        return tlv_data
+        return data[length:]
+
+    def value(self):
+        """
+            represents the value of this bitmap as single expression.
+        """
+        return ", ".join([tlv.value() for tlv in self._tlvs])
+
 
     def dump(self):  # dump the bytes.
         """
