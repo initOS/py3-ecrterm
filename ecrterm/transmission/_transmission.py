@@ -2,17 +2,22 @@
 Transmission Basics.
 @author g4b
 """
+import logging
+
 from ecrterm.exceptions import TransmissionException, TransportLayerException
 from ecrterm.packets.base_packets import PacketReceived
 from ecrterm.transmission.signals import TIMEOUT_T4_DEFAULT, TRANSMIT_OK
 
+_logger = logging.getLogger(__name__)
 
-class Transmission(object):
+
+class Transmission:
     """
     A Transmission Object represents an open connection between ECR and
     PT. It regulates the flow of packets, and uses a Transport to send
     its data. The default Transport to use is the serial transport.
     """
+
     actual_timeout = TIMEOUT_T4_DEFAULT
     last = None
 
@@ -35,7 +40,9 @@ class Transmission(object):
     def send_received(self):
         """Send the "Packet Received" Packet."""
         packet = PacketReceived()
-        self.history += [(False, packet), ]
+        self.history += [
+            (False, packet),
+        ]
         self.transport.send(packet, no_wait=True)
 
     def handle_packet_response(self, packet, response):
@@ -48,8 +55,7 @@ class Transmission(object):
         sequence is finished.
         """
         if not self.is_master or self.is_waiting:
-            raise TransmissionException(
-                'Can\'t send until transmisson is ready')
+            raise TransmissionException("Can't send until transmisson is ready")
         self.is_master = False
         self.last = packet
         try:
@@ -59,13 +65,11 @@ class Transmission(object):
             # we sent the packet.
             # now lets wait until we get master back.
             while not self.is_master:
-                self.is_master = self.handle_packet_response(
-                    self.last, response)
+                self.is_master = self.handle_packet_response(self.last, response)
                 if self.is_master:
                     break
                 try:
-                    success, response = self.transport.receive(
-                        self.actual_timeout)
+                    success, response = self.transport.receive(self.actual_timeout)
                     history += [(True, response)]
                 except TransportLayerException:
                     # some kind of timeout.
@@ -75,9 +79,8 @@ class Transmission(object):
                     raise
                 if self.is_master and success:
                     # we actually have to handle a last packet
-                    stay_master = self.handle_packet_response(
-                        packet, response)
-                    print('Is Master Read Ahead happened.')
+                    stay_master = self.handle_packet_response(packet, response)
+                    _logger.debug("Is Master Read Ahead happened.")
                     self.is_master = stay_master
         except Exception:
             self.is_master = True

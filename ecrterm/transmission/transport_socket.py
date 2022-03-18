@@ -1,3 +1,4 @@
+import logging
 from binascii import hexlify
 from socket import (
     IPPROTO_TCP, SHUT_RDWR, SO_KEEPALIVE, SOL_SOCKET, create_connection)
@@ -15,9 +16,9 @@ from ecrterm.exceptions import (
 from ecrterm.packets.apdu import APDUPacket
 from ecrterm.transmission.signals import TIMEOUT_T2
 
-if platform == 'linux':
+if platform == "linux":
     from socket import TCP_KEEPIDLE, TCP_KEEPINTVL
-elif platform == 'darwin':
+elif platform == "darwin":
     from socket import TCP_KEEPINTVL
 try:
     from socket import TCP_KEEPCNT
@@ -25,12 +26,14 @@ except ImportError:
     TCP_KEEPCNT = None
 
 
+_logger = logging.getLogger(__name__)
+
+
 def hexformat(data: bytes) -> str:
     """Return a prettified binary data."""
-    hexlified = str(hexlify(data), 'ascii')
-    splitted = ':'.join(
-        hexlified[i:i + 2] for i in range(0, len(hexlified), 2))
-    return repr(bytes(data)) + ' -> ' + splitted
+    hexlified = str(hexlify(data), "ascii")
+    splitted = ":".join(hexlified[i : i + 2] for i in range(0, len(hexlified), 2))
+    return repr(bytes(data)) + " -> " + splitted
 
 
 class SocketTransport(Transport):
@@ -42,37 +45,49 @@ class SocketTransport(Transport):
     See http://man7.org/linux/man-pages/man7/tcp.7.html for TCP
     flags details.
     """
+
     insert_delays = False
     slog = noop
     defaults = dict(
-        connect_timeout=5, so_keepalive=0, tcp_keepidle=1, tcp_keepintvl=3,
-        tcp_keepcnt=5, debug='false', packetdebug='false')
+        connect_timeout=5,
+        so_keepalive=0,
+        tcp_keepidle=1,
+        tcp_keepintvl=3,
+        tcp_keepcnt=5,
+        debug="false",
+        packetdebug="false",
+    )
 
     def __init__(self, uri: str):
         """Setup the IP and Port."""
         parsed = urlsplit(url=uri)
-        if ':' not in parsed.netloc:
-            raise AttributeError(
-                'uri needs an IP and a port with : separated.')
-        self.ip, port = parsed.netloc.split(':')
+        if ":" not in parsed.netloc:
+            raise AttributeError("uri needs an IP and a port with : separated.")
+        self.ip, port = parsed.netloc.split(":")
         self.port = int(port)
         qs_parsed = parse_qs(qs=parsed.query)
-        self.connect_timeout = int(qs_parsed.get(
-            'connect_timeout', [self.defaults['connect_timeout']])[0])
-        self.so_keepalive = int(qs_parsed.get(
-            'so_keepalive', [self.defaults['so_keepalive']])[0])
-        self.tcp_keepidle = int(qs_parsed.get(
-            'tcp_keepidle', [self.defaults['tcp_keepidle']])[0])
-        self.tcp_keepintvl = int(qs_parsed.get(
-            'tcp_keepintvl', [self.defaults['tcp_keepintvl']])[0])
-        self.tcp_keepcnt = int(qs_parsed.get(
-            'tcp_keepcnt', [self.defaults['tcp_keepcnt']])[0])
-        self._debug = qs_parsed.get(
-            'debug', [self.defaults['debug']])[0] == 'true'
-        self._packetdebug = qs_parsed.get(
-            'packetdebug', [self.defaults['packetdebug']])[0] == 'true'
+        self.connect_timeout = int(
+            qs_parsed.get("connect_timeout", [self.defaults["connect_timeout"]])[0]
+        )
+        self.so_keepalive = int(
+            qs_parsed.get("so_keepalive", [self.defaults["so_keepalive"]])[0]
+        )
+        self.tcp_keepidle = int(
+            qs_parsed.get("tcp_keepidle", [self.defaults["tcp_keepidle"]])[0]
+        )
+        self.tcp_keepintvl = int(
+            qs_parsed.get("tcp_keepintvl", [self.defaults["tcp_keepintvl"]])[0]
+        )
+        self.tcp_keepcnt = int(
+            qs_parsed.get("tcp_keepcnt", [self.defaults["tcp_keepcnt"]])[0]
+        )
+        self._debug = qs_parsed.get("debug", [self.defaults["debug"]])[0] == "true"
+        self._packetdebug = (
+            qs_parsed.get("packetdebug", [self.defaults["packetdebug"]])[0] == "true"
+        )
         if self._debug:
             from ecrterm.ecr import ecr_log
+
             self.slog = ecr_log
 
     def connect(self, timeout: int = None) -> bool:
@@ -83,23 +98,18 @@ class SocketTransport(Transport):
         if timeout is None:
             timeout = self.connect_timeout
         try:
-            self.sock = create_connection(
-                address=(self.ip, self.port), timeout=timeout)
+            self.sock = create_connection(address=(self.ip, self.port), timeout=timeout)
             if self.so_keepalive:
-                self.sock.setsockopt(
-                    SOL_SOCKET, SO_KEEPALIVE, self.so_keepalive)
-            if self.tcp_keepidle and platform == 'linux':
-                self.sock.setsockopt(
-                    IPPROTO_TCP, TCP_KEEPIDLE, self.tcp_keepidle)
-            if self.tcp_keepintvl and platform in set(['linux', 'darwin']):
-                self.sock.setsockopt(
-                    IPPROTO_TCP, TCP_KEEPINTVL, self.tcp_keepintvl)
+                self.sock.setsockopt(SOL_SOCKET, SO_KEEPALIVE, self.so_keepalive)
+            if self.tcp_keepidle and platform == "linux":
+                self.sock.setsockopt(IPPROTO_TCP, TCP_KEEPIDLE, self.tcp_keepidle)
+            if self.tcp_keepintvl and platform in set(["linux", "darwin"]):
+                self.sock.setsockopt(IPPROTO_TCP, TCP_KEEPINTVL, self.tcp_keepintvl)
             if self.tcp_keepcnt and TCP_KEEPCNT:
-                self.sock.setsockopt(
-                    IPPROTO_TCP, TCP_KEEPCNT, self.tcp_keepcnt)
+                self.sock.setsockopt(IPPROTO_TCP, TCP_KEEPCNT, self.tcp_keepcnt)
             return True
         except (ConnectionError, SocketTimeout) as exc:
-            raise TransportConnectionFailed(exc.args[0])
+            raise TransportConnectionFailed(exc.args[0]) from exc
 
     def send(self, apdu, tries: int = 0, no_wait: bool = False):
         """Send data."""
@@ -110,10 +120,11 @@ class SocketTransport(Transport):
         while total_sent < msglen:
             sent = self.sock.send(to_send[total_sent:])
             if self._packetdebug:
-                print('sent', sent, 'bytes of', hexformat(
-                    data=to_send[total_sent:]))
+                _logger.debug(
+                    "sent %s bytes of %s", sent, hexformat(data=to_send[total_sent:])
+                )
             if sent == 0:
-                raise RuntimeError('Socket connection broken.')
+                raise RuntimeError("Socket connection broken.")
             total_sent += sent
         if no_wait:
             return True
@@ -122,18 +133,20 @@ class SocketTransport(Transport):
     def _receive_bytes(self, length: int) -> bytes:
         """Receive and return a fixed amount of bytes."""
         recv_bytes = 0
-        result = b''
+        result = b""
         if self._packetdebug:
-            print('\nwaiting for', length, 'bytes')
+            _logger.debug("waiting for %s bytes", length)
         while recv_bytes < length:
             try:
                 chunk = self.sock.recv(length - recv_bytes)
-            except SocketTimeout:
-                raise TransportTimeoutException('Timed out.')
+            except SocketTimeout as e:
+                raise TransportTimeoutException("Timed out.") from e
             if self._packetdebug:
-                print('received', len(chunk), 'bytes:', hexformat(data=chunk))
-            if chunk == b'':
-                raise TransportLayerException('TCP Stream disconnected.')
+                _logger.debug(
+                    "received %s bytes: %s", len(chunk), hexformat(data=chunk)
+                )
+            if chunk == b"":
+                raise TransportLayerException("TCP Stream disconnected.")
             result += chunk
             recv_bytes += len(chunk)
         return result
@@ -145,12 +158,12 @@ class SocketTransport(Transport):
         """
         data = self._receive_bytes(length=3)
         length = data[2]
-        if length != 0xff:
+        if length != 0xFF:
             return data, length
         # Need to get 2 more bytes
         length = self._receive_bytes(length=2)
         data += length
-        return data, unpack('<H', length)[0]
+        return data, unpack("<H", length)[0]
 
     def _receive(self, timeout=TIMEOUT_T2) -> bytes:
         """
@@ -162,8 +175,7 @@ class SocketTransport(Transport):
         new_data = self._receive_bytes(length=length)
         return data + new_data
 
-    def receive(
-            self, timeout=None, *args, **kwargs) -> Tuple[bool, APDUPacket]:
+    def receive(self, timeout=None, *args, **kwargs) -> Tuple[bool, APDUPacket]:
         """
         Receive data, return success status and ADPUPacket instance.
         """

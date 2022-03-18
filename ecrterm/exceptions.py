@@ -9,6 +9,7 @@ class ZVTException(Exception):
 class TransportLayerException(ZVTException):
     pass
 
+
 class TransportConnectionFailed(TransportLayerException):
     """Raised when the transport can't connect."""
 

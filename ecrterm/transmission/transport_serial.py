@@ -6,6 +6,9 @@ The Serial Layer is a transport used for
 @author g4b
 """
 
+import logging
+from time import time
+
 import serial
 from ecrterm.common import Transport, noop
 from ecrterm.conv import bs2hl, hl2bs, toBytes, toHexString
@@ -16,9 +19,9 @@ from ecrterm.packets.apdu import APDUPacket
 from ecrterm.transmission.signals import (
     ACK, DLE, ETX, NAK, STX, TIMEOUT_T1, TIMEOUT_T2)
 from ecrterm.utils import ensure_bytes, is_stringlike
-from time import time
 
 SERIAL_DEBUG = False
+_logger = logging.getLogger(__name__)
 
 
 def std_serial_log(instance, data, incoming=False):
@@ -26,42 +29,40 @@ def std_serial_log(instance, data, incoming=False):
         if is_stringlike(incoming):
             data = bs2hl(data)
         if incoming:
-            print('< %s' % toHexString(data))
+            _logger.debug("< %s", toHexString(data))
         else:
-            print('> %s' % toHexString(data))
+            _logger.debug("> %s", toHexString(data))
     except Exception:
-        print('| error in log')
+        pass
 
 
-class SerialMessage(object):
+class SerialMessage:
     """
     Converts a Packet into a serial message by serializing the packet
     and inserting it into the final Serial Packet
     CRC and double-DLEs included.
     """
+
     apdu = None
 
     def __init__(self, apdu=None):
         if is_stringlike(apdu):
             # try to get the list of bytes.
-            apdu = toBytes(apdu.replace(' ', ''))
+            apdu = toBytes(apdu.replace(" ", ""))
         elif isinstance(apdu, APDUPacket):
             apdu = apdu.to_list()
         self.apdu = apdu
 
     def _get_crc(self):
         data = hl2bs(self.apdu + [ETX])
-        try:
-            return crc_xmodem16(data)
-        except Exception:
-            print(self.apdu)
-            raise
+        return crc_xmodem16(data)
 
     def _get_crc_l(self):
         return self._get_crc() & 0x00FF
 
     def _get_crc_h(self):
         return (self._get_crc() & 0xFF00) >> 8
+
     crc_l = property(_get_crc_l)
     crc_h = property(_get_crc_h)
 
@@ -75,18 +76,19 @@ class SerialMessage(object):
         new_apdu = []
         while len(apdu):
             if apdu.count(DLE):
-                new_apdu += apdu[:apdu.index(DLE) + 1] + [DLE]
-                del apdu[:apdu.index(DLE) + 1]
+                new_apdu += apdu[: apdu.index(DLE) + 1] + [DLE]
+                del apdu[: apdu.index(DLE) + 1]
             else:
                 new_apdu += apdu
                 apdu = []
         return new_apdu
 
     def __repr__(self):
-        return 'SerialMessage (APDU: %s, CRC-L: %s CRC-H: %s)' % (
+        return "SerialMessage (APDU: %s, CRC-L: %s CRC-H: %s)" % (
             toHexString(self.apdu),
             hex(self.crc_l),
-            hex(self.crc_h))
+            hex(self.crc_h),
+        )
 
     def dump_message(self):
         # if 0x10 in apdu:
@@ -109,8 +111,11 @@ class SerialTransport(Transport):
 
     def connect(self, timeout=30):
         ser = self.SerialCls(
-            port=self.device, baudrate=self.baudrate, parity=serial.PARITY_NONE,
-            stopbits=serial.STOPBITS_TWO, bytesize=serial.EIGHTBITS,
+            port=self.device,
+            baudrate=self.baudrate,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_TWO,
+            bytesize=serial.EIGHTBITS,
             timeout=timeout,  # set a timeout value, None for waiting forever
             xonxoff=0,  # disable software flow control
             rtscts=0,  # disable RTS/CTS flow control
@@ -168,11 +173,11 @@ class SerialTransport(Transport):
         header = bs2hl(header)
         # test if there was a transmission:
         if header == []:
-            raise TransportTimeoutException('Reading Header Timeout')
+            raise TransportTimeoutException("Reading Header Timeout")
         # test our header to be valid
         if header != [DLE, STX]:
             self.slog(header, True)
-            raise TransportLayerException('Header Error: %s' % header)
+            raise TransportLayerException("Header Error: %s" % header)
         # read until DLE, ETX is reached.
         dle = False
         # timeout to T1 after header.
@@ -181,13 +186,13 @@ class SerialTransport(Transport):
             b = ord(self.connection.read(1))  # read a byte.
             if b is None:
                 # timeout
-                raise TransportLayerException('Timeout T1 reading stream.')
+                raise TransportLayerException("Timeout T1 reading stream.")
             if b == ETX and dle:
                 # dle was set, and this is ETX, so we are at the end.
                 # we read the CRC now.
                 crc = self.connection.read(2)
                 if not crc:
-                    raise TransportLayerException('Timeout T1 reading CRC')
+                    raise TransportLayerException("Timeout T1 reading CRC")
                 else:
                     crc = bs2hl(crc)
                 # and break
@@ -203,7 +208,7 @@ class SerialTransport(Transport):
             elif dle:
                 # dle was set, but we got no etx here.
                 # this seems to be an error.
-                raise TransportLayerException('DLE without sense detected.')
+                raise TransportLayerException("DLE without sense detected.")
             # we add this byte to our apdu.
             apdu += [b]
         self.slog(header + apdu + [DLE, ETX] + crc, True)
@@ -234,7 +239,7 @@ class SerialTransport(Transport):
         while not i or (i < 2 and not crc_ok):
             crc_ok, message = self.read_message(timeout)
             if not crc_ok:
-                self.log('CRC Checksum Error, retry %s' % i)
+                self.log("CRC Checksum Error, retry %s" % i)
             i += 1
         if not crc_ok:
             # Message Fail!?
@@ -252,7 +257,7 @@ class SerialTransport(Transport):
         """
         if message:
             self.write(message.as_bin())
-            acknowledge = b''
+            acknowledge = b""
             ts_start = time()
             while not acknowledge:
                 acknowledge = self.connection.read(1)
@@ -272,12 +277,13 @@ class SerialTransport(Transport):
                 # if tries < 3:
                 #    return self.send_message(message, tries + 1, no_answer)
                 # else:
-                raise TransportLayerException('Could not send message')
+                raise TransportLayerException("Could not send message")
             elif not acknowledge:
-                raise TransportTimeoutException('No Answer, Possible Timeout')
+                raise TransportTimeoutException("No Answer, Possible Timeout")
             else:
                 raise TransportLayerException(
-                    'Unknown Acknowledgment Byte %s' % bs2hl(acknowledge))
+                    "Unknown Acknowledgment Byte %s" % bs2hl(acknowledge)
+                )
 
     def send(self, apdu, tries=0, no_wait=False):
         """Automatically converts an apdu into a message."""
@@ -285,11 +291,12 @@ class SerialTransport(Transport):
 
 
 # self test
-if __name__ == '__main__':
-    c = SerialTransport('/dev/ttyUSB0')
+if __name__ == "__main__":
+    c = SerialTransport("/dev/ttyUSB0")
     from ecrterm.packets.base_packets import Registration
+
     if c.connect():
-        print('connected to usb0')
+        print("connected to usb0")
     else:
         exit()
     # register

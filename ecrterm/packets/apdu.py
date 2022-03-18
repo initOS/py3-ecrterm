@@ -1,20 +1,22 @@
 """Classes and Functions which deal with the APDU Layer."""
 
-from logging import debug
-
-from six.moves import range
+import logging
 
 from ecrterm.conv import toBytes
 from ecrterm.exceptions import NotEnoughData
 from ecrterm.packets.bitmaps import BITMAPS_ARGS
 from ecrterm.packets.bmp import BMP, int_word_split
 from ecrterm.utils import is_stringlike
+from six.moves import range
+
+_logger = logging.getLogger(__name__)
 
 
 class _PacketRegister:
     """
     All Packets come into this register. Singleton for each Protocol.
     """
+
     # Currencies
     CC_EUR = [0x09, 0x78]
     # Command Classes
@@ -35,20 +37,26 @@ class _PacketRegister:
             if packet_class.cmd_instr is not None:
                 # this packet is a specific tuple of instructions.
                 # it will be registered as such
-                key_str = '%s_%s' % (
-                    hex(packet_class.cmd_class), hex(packet_class.cmd_instr))
+                key_str = "%s_%s" % (
+                    hex(packet_class.cmd_class),
+                    hex(packet_class.cmd_instr),
+                )
                 # debug
-                debug('Registered Class %s for Command Tuple ( %s, %s )'
-                      % (str(packet_class),
-                         hex(packet_class.cmd_class),
-                         hex(packet_class.cmd_instr)))
+                _logger.debug(
+                    "Registered Class %s for Command Tuple ( %s, %s )",
+                    str(packet_class),
+                    hex(packet_class.cmd_class),
+                    hex(packet_class.cmd_instr),
+                )
             else:
                 # this packet handles a variety of supercommands
-                key_str = '%s' % hex(packet_class.cmd_class)
+                key_str = "%s" % hex(packet_class.cmd_class)
                 # debug
-                debug('Registered Class %s for Super Command Fallback ( %s )'
-                      % (str(packet_class),
-                         hex(packet_class.cmd_class)))
+                _logger.debug(
+                    "Registered Class %s for Super Command Fallback ( %s )",
+                    str(packet_class),
+                    hex(packet_class.cmd_class),
+                )
             self.packets[key_str] = packet_class
 
     def detect(self, datastream):
@@ -61,8 +69,8 @@ class _PacketRegister:
         # print '<| %s %s' % (hex(cc), hex(ci))
         # now look up if we got this packet class:
         return self.packets.get(
-            '%s_%s' % (hex(cc), hex(ci)),
-            self.packets.get('%s' % (hex(cc)), None))
+            "%s_%s" % (hex(cc), hex(ci)), self.packets.get("%s" % (hex(cc)), None)
+        )
 
 
 Packets = _PacketRegister()
@@ -74,6 +82,7 @@ class APDUPacket(object):
     Goal is to not save any binary data in the instance anymore.
     Translation from data to classes and vice versa should be fluent.
     """
+
     cmd_class = 0x6  # standard.
     cmd_instr = None
     allowed_bitmaps = None  # None=All, [] = None.
@@ -133,8 +142,11 @@ class APDUPacket(object):
         if data_len > 254:
             if data_len > 65535:
                 raise NotImplementedError(
-                    "APDU Data length cannot be bigger than 2 bytes.")
-            return [0xFF, ] + int_word_split(data_len)
+                    "APDU Data length cannot be bigger than 2 bytes."
+                )
+            return [
+                0xFF,
+            ] + int_word_split(data_len)
         return [data_len]
 
     def enrich_fixed(self):
@@ -156,7 +168,9 @@ class APDUPacket(object):
                     elif isinstance(val, list):
                         pass
                     else:
-                        val = [val, ]
+                        val = [
+                            val,
+                        ]
                     # now just save it into ds
                     ds += val
         return ds
@@ -208,7 +222,7 @@ class APDUPacket(object):
         # now we introspect data
         pos = 0
         bitmaps = []
-        if blob[pos] == 0xff:
+        if blob[pos] == 0xFF:
             # length field is next two bytes.
             # @todo: could be wrong:
             length = (blob[pos + 2] << 8) + blob[pos + 1]
@@ -219,9 +233,9 @@ class APDUPacket(object):
         # now we should read our data ahead to length.
         # look ahead if we have enough data.
         if len(blob) >= pos + length:
-            data = blob[pos:pos + length]
+            data = blob[pos : pos + length]
         else:
-            raise NotEnoughData('Not enough Data to create the packet data.')
+            raise NotEnoughData("Not enough Data to create the packet data.")
         # step 1: fixed arguments.
         # if this packet has some fixed arguments, they have to be
         # parsed first.
@@ -231,18 +245,20 @@ class APDUPacket(object):
             try:
                 bmp, data = BMP.read_stream(data)
                 bitmaps += [bmp]
-            except NotImplementedError as e:
-                #Ignore further bitmaps to not break the transmission
+            except NotImplementedError:
+                # Ignore further bitmaps to not break the transmission
                 break
         self.bitmaps = bitmaps
+
     data = property(get_data, set_data)
 
     @classmethod
-    def parse(cls, blob=''):
+    def parse(cls, blob=""):
         if is_stringlike(blob):
             # lets convert our string into a bytelist.
             blob = toBytes(blob)
-        if type(blob) is list:
+
+        if isinstance(blob, list):
             # allright.
             # first we detect our packetclass
             PacketClass = Packets.detect(blob[:2])
@@ -253,7 +269,7 @@ class APDUPacket(object):
                     instance.cmd_instr = blob[1]
                 instance.data = blob[2:]
                 if not instance.validate():
-                    debug('Validation Error')
+                    _logger.debug("Validation Error")
                 return instance
             else:
-                debug('Unknown Packet')
+                _logger.debug("Unknown Packet")
