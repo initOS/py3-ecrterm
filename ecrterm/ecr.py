@@ -22,6 +22,7 @@ from ecrterm.packets.base_packets import (
     IntermediateStatusInformation,
     Packet,
     PrintLine,
+    Refund,
     Registration,
     ResetTerminal,
     SendTurnoverTotals,
@@ -383,6 +384,31 @@ class ECR:
         throws exceptions.
         """
         packet = Authorisation(
+            amount=amount_cent,  # in cents.
+            currency_code=978,  # euro, only one that works, can be skipped.
+        )
+        if listener:
+            packet.register_response_listener(listener)
+        code = self.transmit(packet=packet)
+
+        if code == 0:
+            # now check if the packet actually got what it wanted.
+            if self.transmitter.last.completion:
+                if isinstance(self.transmitter.last.completion, Completion):
+                    return True
+            else:
+                return False
+        return False
+
+    def refund(self, amount_cent, listener=None):
+        """
+        executes a refund in amount of cents.
+        @returns: True, if refund went through, or False if it was
+        canceled.
+        throws exceptions.
+        """
+        packet = Refund(
+            password=self.password,
             amount=amount_cent,  # in cents.
             currency_code=978,  # euro, only one that works, can be skipped.
         )
