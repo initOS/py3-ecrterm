@@ -638,6 +638,36 @@ class Authorisation(Packet):
 Packets.register(Authorisation)
 
 
+class Refund(Packet):
+    """
+    06 31
+
+    Packet used for refunds. Uses same sequence as Authorisation
+    """
+
+    cmd_class = 0x6
+    cmd_instr = 0x31
+    wait_for_completion = True
+    fixed_arguments = ("password",)
+
+    allowed_bitmaps = [
+        "amount",
+        "cc",
+        "payment_type",
+        "track_1",
+        "card_expire",
+        "card_number",
+        "track_2",
+        "track_3",
+        "aid",
+        "additional",
+        "card_type",
+    ]
+
+
+Packets.register(Refund)
+
+
 class PrintLine(Packet):
     """
     06 D1
