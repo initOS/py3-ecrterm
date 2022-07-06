@@ -14,6 +14,7 @@ from ecrterm.exceptions import (
     TransportConnectionFailed, TransportLayerException,
     TransportTimeoutException)
 from ecrterm.packets.apdu import APDUPacket
+from ecrterm.packets.base_packets import PacketReceivedError
 from ecrterm.transmission.signals import TIMEOUT_T2
 
 if platform == "linux":
@@ -110,6 +111,19 @@ class SocketTransport(Transport):
             return True
         except (ConnectionError, SocketTimeout) as exc:
             raise TransportConnectionFailed(exc.args[0]) from exc
+
+    def connected(self, timeout=0.25):
+        """
+        Send invalid packet.
+        If Terminal is still connected we expect a ReceivedError as Answer
+        """
+        try:
+            self.sock.sendall(b"\0\0\0")
+            status, response = self.receive(timeout=timeout)
+            return status and isinstance(response, PacketReceivedError)
+
+        except (TransportTimeoutException, ConnectionResetError, BrokenPipeError):
+            return False
 
     def send(self, apdu, tries: int = 0, no_wait: bool = False):
         """Send data."""

@@ -515,6 +515,9 @@ class ECR:
         transmission = self.transmitter.transmit(packet)
         return transmission
 
+    def connected(self):
+        return self.transmitter.connected(timeout=0.25)
+
     # dev functions.
     #########################################################################
 

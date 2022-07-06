@@ -7,6 +7,7 @@ import logging
 from ecrterm.exceptions import TransmissionException, TransportLayerException
 from ecrterm.packets.base_packets import PacketReceived
 from ecrterm.transmission.signals import TIMEOUT_T4_DEFAULT, TRANSMIT_OK
+from ecrterm.transmission.transport_socket import SocketTransport
 
 _logger = logging.getLogger(__name__)
 
@@ -29,6 +30,20 @@ class Transmission:
         self.log_list = []
         self.history = []
         self.last_history = []
+
+
+    def connected(self, timeout=0.25):
+        if isinstance(self.transport, SocketTransport):
+            # Do not send packet when not master
+            # -> A transaction is in progress
+            if not self.is_master:
+                return True
+
+            return self.transport.connected(timeout)
+
+        return True
+
+
 
     def log_response(self, response):
         """
