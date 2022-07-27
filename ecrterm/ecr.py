@@ -174,6 +174,7 @@ class ECR:
         self._state_registered = False
         self._state_connected = False
         self.password = password
+        self.config_byte = None
 
         if self.transport.connect():
             self.transmitter = Transmission(self.transport)
@@ -198,6 +199,7 @@ class ECR:
             kwargs["password"] = self.password
         if config_byte is not None:
             kwargs["config_byte"] = config_byte
+            self.config_byte = config_byte
 
         self.ecr_log(kwargs, raw=True)
 
@@ -516,7 +518,14 @@ class ECR:
         return transmission
 
     def connected(self):
-        return self.transmitter.connected(timeout=0.25)
+        kwargs = {}
+        if self.password:
+            kwargs["password"] = self.password
+        if self.config_byte is not None:
+            kwargs["config_byte"] = self.config_byte
+
+        reg = Registration(**kwargs)
+        return self.transmitter.connected(reg, timeout=0.25)
 
     # dev functions.
     #########################################################################

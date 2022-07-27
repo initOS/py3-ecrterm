@@ -32,14 +32,14 @@ class Transmission:
         self.last_history = []
 
 
-    def connected(self, timeout=0.25):
+    def connected(self, registration, timeout=0.25):
         if isinstance(self.transport, SocketTransport):
             # Do not send packet when not master
             # -> A transaction is in progress
             if not self.is_master:
                 return True
 
-            return self.transport.connected(timeout)
+            return self.transport.connected(registration, timeout)
 
         return True
 
