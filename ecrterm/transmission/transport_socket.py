@@ -146,7 +146,7 @@ class SocketTransport(Transport):
             total_sent += sent
         if no_wait:
             return True
-        return self.receive()
+        return self.receive(timeout=self.connect_timeout)
 
     def _receive_bytes(self, length: int) -> bytes:
         """Receive and return a fixed amount of bytes."""
