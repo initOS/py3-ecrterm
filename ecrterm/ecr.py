@@ -22,6 +22,7 @@ from ecrterm.packets.base_packets import (
     IntermediateStatusInformation,
     Packet,
     PrintLine,
+    Refund,
     Registration,
     ResetTerminal,
     SendTurnoverTotals,
@@ -173,6 +174,7 @@ class ECR:
         self._state_registered = False
         self._state_connected = False
         self.password = password
+        self.config_byte = None
 
         if self.transport.connect():
             self.transmitter = Transmission(self.transport)
@@ -197,6 +199,7 @@ class ECR:
             kwargs["password"] = self.password
         if config_byte is not None:
             kwargs["config_byte"] = config_byte
+            self.config_byte = config_byte
 
         self.ecr_log(kwargs, raw=True)
 
@@ -399,6 +402,31 @@ class ECR:
                 return False
         return False
 
+    def refund(self, amount_cent, listener=None):
+        """
+        executes a refund in amount of cents.
+        @returns: True, if refund went through, or False if it was
+        canceled.
+        throws exceptions.
+        """
+        packet = Refund(
+            password=self.password,
+            amount=amount_cent,  # in cents.
+            currency_code=978,  # euro, only one that works, can be skipped.
+        )
+        if listener:
+            packet.register_response_listener(listener)
+        code = self.transmit(packet=packet)
+
+        if code == 0:
+            # now check if the packet actually got what it wanted.
+            if self.transmitter.last.completion:
+                if isinstance(self.transmitter.last.completion, Completion):
+                    return True
+            else:
+                return False
+        return False
+
     def restart(self):
         """Restarts/resets the PT."""
         self._state_registered = False
@@ -488,6 +516,16 @@ class ECR:
             sleep(0.2)
         transmission = self.transmitter.transmit(packet)
         return transmission
+
+    def connected(self):
+        kwargs = {}
+        if self.password:
+            kwargs["password"] = self.password
+        if self.config_byte is not None:
+            kwargs["config_byte"] = self.config_byte
+
+        reg = Registration(**kwargs)
+        return self.transmitter.connected(reg, timeout=0.25)
 
     # dev functions.
     #########################################################################

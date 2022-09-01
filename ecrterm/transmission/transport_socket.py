@@ -14,6 +14,7 @@ from ecrterm.exceptions import (
     TransportConnectionFailed, TransportLayerException,
     TransportTimeoutException)
 from ecrterm.packets.apdu import APDUPacket
+from ecrterm.packets.base_packets import PacketReceived, Completion
 from ecrterm.transmission.signals import TIMEOUT_T2
 
 if platform == "linux":
@@ -111,6 +112,23 @@ class SocketTransport(Transport):
         except (ConnectionError, SocketTimeout) as exc:
             raise TransportConnectionFailed(exc.args[0]) from exc
 
+    def connected(self, registration, timeout=0.25):
+        """
+        Send Registration Packet
+        If Terminal is still connected we expect PacketRecieved and Completion as Answer
+        We must answer the Completion Packe with PacketReceived
+        """
+        try:
+            self.sock.sendall(bytes(registration.to_list()))
+            status_a, response_a = self.receive(timeout=timeout)
+            status_b, response_b = self.receive(timeout=timeout)
+            self.sock.sendall(bytes(PacketReceived().to_list()))
+            return (status_a and isinstance(response_a, PacketReceived) and
+                    status_b and isinstance(response_b, Completion))
+
+        except (TransportTimeoutException, ConnectionResetError, BrokenPipeError):
+            return False
+
     def send(self, apdu, tries: int = 0, no_wait: bool = False):
         """Send data."""
         to_send = bytes(apdu.to_list())
@@ -128,7 +146,7 @@ class SocketTransport(Transport):
             total_sent += sent
         if no_wait:
             return True
-        return self.receive()
+        return self.receive(timeout=self.connect_timeout)
 
     def _receive_bytes(self, length: int) -> bytes:
         """Receive and return a fixed amount of bytes."""
